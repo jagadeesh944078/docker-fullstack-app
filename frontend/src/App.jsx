@@ -8,7 +8,7 @@ const App = () => {
   return (
     <div>
       <h1>Docker App 🚀</h1>
-      <button onClick={callApi}>Call Backend</button>
+      <button onClick={callApi}>Call Backend using React</button>
     </div>
   );
 };
