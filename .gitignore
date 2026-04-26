@@ -1,0 +1,19 @@
+# node
+node_modules/
+
+# env
+.env
+
+# logs
+*.log
+
+# editor
+.vscode/
+.DS_Store
+
+# build outputs
+dist/
+build/
+
+# Docker (optional)
+docker-compose.override.yml
