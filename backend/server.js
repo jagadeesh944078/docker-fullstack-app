@@ -1,14 +1,18 @@
 import express from "express";
-import cors from "cors";
 
 const app = express();
 
-app.use(cors());
+const PORT = process.env.PORT || 5000;
+const NODE_ENV = process.env.NODE_ENV || "development";
+const API_NAME = process.env.API_NAME || "My API";
 
 app.get("/api/hello", (req, res) => {
-  res.json({ message: "Hello from backend 🚀" });
+  res.json({
+    message: `Hello from ${API_NAME}`,
+    environment: NODE_ENV,
+  });
 });
 
-app.listen(5000, () => {
-  console.log("Server running on port 5000");
+app.listen(PORT, () => {
+  console.log(`${API_NAME} running on port ${PORT} in ${NODE_ENV} mode`);
 });
