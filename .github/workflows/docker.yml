@@ -1,30 +1,34 @@
-name: Multi Env Auto Deploy
+name: Docker CI/CD + Auto Deploy
 
 on:
   push:
-    branches:
-      - develop
-      - qa
-      - main
+    branches: ["dev", "qa", "main"]
 
 jobs:
-  deploy:
+  build-push-deploy:
     runs-on: ubuntu-latest
 
-    # 🔥 Map branch → environment
     environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/qa' && 'qa' || 'dev' }}
 
     steps:
-      - name: Checkout
+      # 🔹 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      # 🔹 Set ENV + HOST
-      - name: Set variables
+      # 🔹 Login to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 🔹 Set ENV (dev / qa / prod)
+      - name: Set environment
         run: |
-          if [[ "${GITHUB_REF##*/}" == "develop" ]]; then
+          if [[ "${GITHUB_REF}" == "refs/heads/dev" ]]; then
             echo "ENV=dev" >> $GITHUB_ENV
             echo "HOST=${{ secrets.EC2_DEV_HOST }}" >> $GITHUB_ENV
-          elif [[ "${GITHUB_REF##*/}" == "qa" ]]; then
+          elif [[ "${GITHUB_REF}" == "refs/heads/qa" ]]; then
             echo "ENV=qa" >> $GITHUB_ENV
             echo "HOST=${{ secrets.EC2_QA_HOST }}" >> $GITHUB_ENV
           else
@@ -32,21 +36,30 @@ jobs:
             echo "HOST=${{ secrets.EC2_PROD_HOST }}" >> $GITHUB_ENV
           fi
 
-      # 🔹 Docker login
-      - name: Docker Login
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      # 🔹 Build & Push
-      - name: Build & Push Images
+      # 🔹 Build FRONTEND
+      - name: Build frontend image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend:${ENV} ./frontend
-          docker push ${{ secrets.DOCKER_USERNAME }}/frontend:${ENV}
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend:${ENV} \
+                       -t ${{ secrets.DOCKER_USERNAME }}/frontend:${{ github.sha }} \
+                       --build-arg ENVIRONMENT=${ENV} ./frontend
 
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/backend:${ENV} ./backend
+      # 🔹 Push FRONTEND
+      - name: Push frontend images
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/frontend:${ENV}
+          docker push ${{ secrets.DOCKER_USERNAME }}/frontend:${{ github.sha }}
+
+      # 🔹 Build BACKEND
+      - name: Build backend image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/backend:${ENV} \
+                       -t ${{ secrets.DOCKER_USERNAME }}/backend:${{ github.sha }} ./backend
+
+      # 🔹 Push BACKEND
+      - name: Push backend images
+        run: |
           docker push ${{ secrets.DOCKER_USERNAME }}/backend:${ENV}
+          docker push ${{ secrets.DOCKER_USERNAME }}/backend:${{ github.sha }}
 
       # 🔹 Deploy to EC2
       - name: Deploy to EC2
@@ -57,5 +70,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd ~/myapp
-            docker-compose pull
-            docker-compose up -d
+            sudo docker compose down
+            sudo docker compose pull
+            sudo docker compose up -d --remove-orphans
